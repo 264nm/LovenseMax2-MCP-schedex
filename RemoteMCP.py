@@ -1,33 +1,35 @@
 # server.py
-from mcp.server.fastmcp import FastMCP
-import sys
 import logging
-import Functions
 import os
 import re
+import sys
+from typing import Any
+
+from mcp.server.fastmcp import FastMCP
+
 import Patterns
 import Scheduler
-import StopFunction
 import Transport
-logger = logging.getLogger('RemoteMCP')
+
+logger = logging.getLogger("RemoteMCP")
 
 # Fix UTF-8 encoding for Windows console
-if sys.platform == 'win32':
-    sys.stderr.reconfigure(encoding='utf-8')
-    sys.stdout.reconfigure(encoding='utf-8')
-
+if sys.platform == "win32":
+    sys.stderr.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")
 
 
 # Create an MCP server
 mcp = FastMCP("RemoteMCP")
 
-domainUrl = ""
+domain_url = ""
 
 # ------------------------
 # Utility Functions
 # ------------------------
 
-def ConvertIpToDomain(game_mode_ip, https_port) -> tuple:
+
+def ConvertIpToDomain(game_mode_ip: str, https_port: str | int) -> tuple[str | None, str]:
     """
     Convert a local IP address to the Lovense Remote Game Mode domain format.
 
@@ -46,7 +48,7 @@ def ConvertIpToDomain(game_mode_ip, https_port) -> tuple:
     if not re.match(r"^(\d{1,3}\.){3}\d{1,3}$", ip):
         return None, "❌ Invalid IP format (e.g. 192.168.1.1)"
 
-    for part in ip.split('.'):
+    for part in ip.split("."):
         try:
             if not 0 <= int(part) <= 255:
                 raise ValueError
@@ -56,59 +58,62 @@ def ConvertIpToDomain(game_mode_ip, https_port) -> tuple:
     domain = f"https://{ip.replace('.', '-')}.lovense.club:{https_port}"
     return domain, f"✅ Converted domain: {domain}"
 
+
 # ------------------------
 # MCP -> Get from command line parameters
 # ------------------------
-def parse_args_from_argv() -> dict:
-    args = {}
+def parse_args_from_argv() -> dict[str, str]:
+    args: dict[str, str] = {}
     for arg in sys.argv[1:]:
-        if '=' in arg:
-            key, value = arg.split('=', 1)
+        if "=" in arg:
+            key, value = arg.split("=", 1)
             args[key] = value
     return args
 
-def get_mcp_config() -> dict:
+
+def get_mcp_config() -> dict[str, str]:
 
     cli_args = parse_args_from_argv()
 
-    config = {}
-    config['game_mode_ip'] = cli_args.get("GAME_MODE_IP") or os.getenv("GAME_MODE_IP")
-    config['game_mode_port'] = cli_args.get("GAME_MODE_PORT") or os.getenv("GAME_MODE_PORT")
+    raw = {
+        "game_mode_ip": cli_args.get("GAME_MODE_IP") or os.getenv("GAME_MODE_IP"),
+        "game_mode_port": cli_args.get("GAME_MODE_PORT") or os.getenv("GAME_MODE_PORT"),
+    }
 
-    missing_keys = [k for k in ['game_mode_ip', 'game_mode_port'] if not config.get(k)]
+    missing_keys = [key for key, value in raw.items() if not value]
     if missing_keys:
         raise ValueError(f"Required MCP configuration parameters are missing: {missing_keys}")
 
-    global domainUrl
-    domain, message = ConvertIpToDomain(config['game_mode_ip'], config['game_mode_port'])
+    config = {key: value for key, value in raw.items() if value is not None}
+
+    global domain_url
+    domain, message = ConvertIpToDomain(config["game_mode_ip"], config["game_mode_port"])
     if not domain:
         raise ValueError(message)
-    domainUrl = domain
+    domain_url = domain
     return config
 
 
-
-
-
 @mcp.tool()
-def GetToys() -> dict:
+def GetToys() -> dict[str, Any]:
     """
     List connected Lovense toys with their IDs, names, functions, battery and status.
     Use the returned toy IDs with SendFunctions/SendPreset to target a single toy.
     """
-    if not domainUrl:
+    if not domain_url:
         return {"success": False, "message": "Domain URL not initialized"}
 
     try:
-        result = Functions.GetToys(domainUrl)
+        result = Transport.GetToys(domain_url)
         if result is None:
             return {"success": False, "message": "Request failed (non-200 from toy API)"}
         return {"success": True, "response": result}
     except Exception as e:
         return {"success": False, "message": str(e)}
 
+
 @mcp.tool()
-def SendFunctions(actions: str, time_sec: float = 2, toy: str = "") -> dict:
+def SendFunctions(actions: str, time_sec: float = 2, toy: str = "") -> dict[str, Any]:
     """
     Send function commands to Lovense toys.
 
@@ -120,33 +125,51 @@ def SendFunctions(actions: str, time_sec: float = 2, toy: str = "") -> dict:
         time_sec: Duration in seconds (0 = run until stopped).
         toy: Toy ID to target; empty targets all connected toys.
     """
-    if not domainUrl:
+    if not domain_url:
         return {"success": False, "message": "Domain URL not initialized"}
 
     action_ranges = {"vibrate": 20, "rotate": 20, "pump": 3, "all": 20}
-    for action in actions.split(','):
+    for action in actions.split(","):
         action = action.strip()
         if action.lower() == "stop":
             continue
-        if ':' not in action:
-            return {"success": False, "message": f"Malformed action: {action} (expected Name:strength)"}
-        name, _, value = action.partition(':')
+        if ":" not in action:
+            return {
+                "success": False,
+                "message": f"Malformed action: {action} (expected Name:strength)",
+            }
+        name, _, value = action.partition(":")
         ceiling = action_ranges.get(name.strip().lower())
         if ceiling is None:
-            return {"success": False, "message": f"Unknown action: {name.strip()} (use Vibrate, Rotate, Pump, All)"}
+            return {
+                "success": False,
+                "message": f"Unknown action: {name.strip()} (use Vibrate, Rotate, Pump, All)",
+            }
         if not value.strip().isdigit() or not 0 <= int(value.strip()) <= ceiling:
-            return {"success": False, "message": f"Invalid strength for {name.strip()}: {value.strip()} (must be 0-{ceiling})"}
+            return {
+                "success": False,
+                "message": (
+                    f"Invalid strength for {name.strip()}: {value.strip()} (must be 0-{ceiling})"
+                ),
+            }
 
     try:
-        result = Functions.SendFunctions(domainUrl, toy, actions, time_sec)
+        result = Transport.SendFunctions(domain_url, toy, actions, time_sec)
         if result is None:
             return {"success": False, "message": "Request failed (non-200 from toy API)"}
         return {"success": True, "message": f"Sent {actions} for {time_sec}s", "response": result}
     except Exception as e:
         return {"success": False, "message": str(e)}
 
+
 @mcp.tool()
-def SendPattern(strength: str, interval_ms: int = 500, features: str = "Vibrate", time_sec: float = 0, toy: str = "") -> dict:
+def SendPattern(
+    strength: str,
+    interval_ms: int = 500,
+    features: str = "Vibrate",
+    time_sec: float = 0,
+    toy: str = "",
+) -> dict[str, Any]:
     """
     Play a custom pattern on Lovense toys.
 
@@ -163,28 +186,37 @@ def SendPattern(strength: str, interval_ms: int = 500, features: str = "Vibrate"
         time_sec: Duration in seconds (0 = run until stopped).
         toy: Toy ID to target; empty targets all connected toys.
     """
-    if not domainUrl:
+    if not domain_url:
         return {"success": False, "message": "Domain URL not initialized"}
 
     feature_map = {"vibrate": ("v", 20), "rotate": ("r", 20), "pump": ("p", 3)}
     letters = []
     max_strength = 0
-    for feature in features.split(','):
+    for feature in features.split(","):
         entry = feature_map.get(feature.strip().lower())
         if not entry:
-            return {"success": False, "message": f"Unknown feature: {feature.strip()} (use Vibrate, Rotate, Pump)"}
+            return {
+                "success": False,
+                "message": f"Unknown feature: {feature.strip()} (use Vibrate, Rotate, Pump)",
+            }
         letter, ceiling = entry
         letters.append(letter)
         max_strength = max(max_strength, ceiling)
 
-    steps = [s.strip() for s in strength.split(';') if s.strip()]
+    steps = [s.strip() for s in strength.split(";") if s.strip()]
     if not steps:
         return {"success": False, "message": "Strength sequence cannot be empty"}
     if len(steps) > 50:
         return {"success": False, "message": f"Too many strength steps: {len(steps)} (max 50)"}
     for step in steps:
         if not step.isdigit() or not 0 <= int(step) <= max_strength:
-            return {"success": False, "message": f"Invalid strength step: {step} (must be 0-{max_strength} for features {features})"}
+            return {
+                "success": False,
+                "message": (
+                    f"Invalid strength step: {step} "
+                    f"(must be 0-{max_strength} for features {features})"
+                ),
+            }
 
     if interval_ms <= 100:
         return {"success": False, "message": "interval_ms must be greater than 100"}
@@ -192,19 +224,20 @@ def SendPattern(strength: str, interval_ms: int = 500, features: str = "Vibrate"
     rule = f"V:1;F:{','.join(letters)};S:{interval_ms}#"
 
     message = f"Playing {len(steps)}-step pattern ({interval_ms}ms/step) for {time_sec}s"
-    if 'p' in letters and max_strength > 3 and any(int(s) > 3 for s in steps):
+    if "p" in letters and max_strength > 3 and any(int(s) > 3 for s in steps):
         message += " (pump clamps to 3 on steps above 3)"
 
     try:
-        result = Transport.SendPattern(domainUrl, toy, rule, ';'.join(steps), time_sec)
+        result = Transport.SendPattern(domain_url, toy, rule, ";".join(steps), time_sec)
         if result is None:
             return {"success": False, "message": "Request failed (non-200 from toy API)"}
         return {"success": True, "message": message, "response": result}
     except Exception as e:
         return {"success": False, "message": str(e)}
 
+
 @mcp.tool()
-def SendPreset(preset: str, time_sec: float = -1, toy: str = "") -> dict:
+def SendPreset(preset: str, time_sec: float = -1, toy: str = "") -> dict[str, Any]:
     """
     Run a preset pattern on toys: built-in Lovense presets or custom named
     patterns from Patterns.py.
@@ -219,30 +252,42 @@ def SendPreset(preset: str, time_sec: float = -1, toy: str = "") -> dict:
             10 for built-ins, or the custom preset's own duration.
         toy: Toy ID to target; empty targets all connected toys.
     """
-    if not domainUrl:
+    if not domain_url:
         return {"success": False, "message": "Domain URL not initialized"}
 
     name = preset.lower()
     try:
         if name in ("pulse", "wave", "fireworks", "earthquake"):
             duration = 10 if time_sec < 0 else time_sec
-            result = Functions.SendPreset(domainUrl, toy, name, duration)
+            result = Transport.SendPreset(domain_url, toy, name, duration)
         else:
             custom = Patterns.GetPattern(name)
             if not custom:
-                known = ", ".join(["pulse", "wave", "fireworks", "earthquake"] + list(Patterns.PATTERNS))
-                return {"success": False, "message": f"Unknown preset: {preset} (available: {known})"}
+                known = ", ".join(
+                    ["pulse", "wave", "fireworks", "earthquake"] + list(Patterns.PATTERNS)
+                )
+                return {
+                    "success": False,
+                    "message": f"Unknown preset: {preset} (available: {known})",
+                }
             rule, strength, default_time = custom
             duration = default_time if time_sec < 0 else time_sec
-            result = Transport.SendPattern(domainUrl, toy, rule, strength, duration)
+            result = Transport.SendPattern(domain_url, toy, rule, strength, duration)
         if result is None:
             return {"success": False, "message": "Request failed (non-200 from toy API)"}
-        return {"success": True, "message": f"Running preset {preset} for {duration}s", "response": result}
+        return {
+            "success": True,
+            "message": f"Running preset {preset} for {duration}s",
+            "response": result,
+        }
     except Exception as e:
         return {"success": False, "message": str(e)}
 
+
 @mcp.tool()
-def PlayScript(script: str, toy: str = "", total_sec: float = 0, peak_cap: int = 0) -> dict:
+def PlayScript(
+    script: str, toy: str = "", total_sec: float = 0, peak_cap: int = 0
+) -> dict[str, Any]:
     """
     Play a multi-channel script that drives Vibrate and Pump on independent
     curves. Unlike SendPreset/SendPattern -- where the Pattern command forces
@@ -261,7 +306,7 @@ def PlayScript(script: str, toy: str = "", total_sec: float = 0, peak_cap: int =
         peak_cap: Clamp every vibration value to at most this (1-20), for
             calibration runs. 0 runs the script's own values.
     """
-    if not domainUrl:
+    if not domain_url:
         return {"success": False, "message": "Domain URL not initialized"}
 
     if peak_cap and not 1 <= peak_cap <= 20:
@@ -271,7 +316,7 @@ def PlayScript(script: str, toy: str = "", total_sec: float = 0, peak_cap: int =
 
     try:
         duration = Scheduler.PlayScript(
-            domainUrl,
+            domain_url,
             toy,
             script,
             total_sec=total_sec or None,
@@ -286,25 +331,25 @@ def PlayScript(script: str, toy: str = "", total_sec: float = 0, peak_cap: int =
     except Exception as e:
         return {"success": False, "message": str(e)}
 
+
 @mcp.tool()
-async def SendStopFunction():
+async def SendStopFunction() -> dict[str, Any]:
     """
     Stop all actions currently running, including any script started by
     PlayScript.
     """
-    if not domainUrl:
+    if not domain_url:
         return {"success": False, "message": "Domain URL not initialized"}
 
     try:
         stopped = Scheduler.StopScript()
-        StopFunction.SendStopFunction(domainUrl, "")
+        Transport.SendStopFunction(domain_url, "")
         message = "Stopped all toy functions"
         if stopped:
             message += f" and cancelled script '{stopped}'"
         return {"success": True, "message": message}
     except Exception as e:
         return {"success": False, "message": str(e)}
-
 
 
 # Start the server

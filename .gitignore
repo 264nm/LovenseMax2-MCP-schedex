@@ -9,6 +9,13 @@ wheels/
 # Virtual environments
 .venv
 
+# Tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
 # Local MCP config: contains a LAN IP and absolute home paths.
 # Copy .mcp.json.example to .mcp.json and fill in your own values.
 .mcp.json

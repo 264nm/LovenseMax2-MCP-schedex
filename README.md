@@ -1,38 +1,31 @@
 # RemoteMCP — extended
 
-An MCP server for driving Lovense toys, built on Lovense's official RemoteMCP sample
-with added multi-channel scripting, custom presets, and corrected input validation.
+An MCP server for driving Lovense toys over the Game Mode local API, with multi-channel
+scripting, research-grounded presets, and strict input validation.
 
-## ⚠️ Licensing — read before making this repository public
+## Provenance
 
-**This repository should stay private as-is.** It contains code from Lovense's official
-sample, which carries **no license**:
+**All code here is original.** The project began as an extension of Lovense's official
+RemoteMCP sample, but that sample carried **no license** — no LICENSE file, copyright
+header, or terms of use appear in the zip, on the
+[docs page](https://developer.lovense.com/docs/ai/remote-mcp.html), or on
+[Lovense's GitHub org](https://github.com/lovense). Absence of a license is not
+permission: under default copyright all rights are reserved and no redistribution right
+is granted, so vendoring it would have kept this repository permanently private.
 
-- [developer.lovense.com/docs/ai/remote-mcp.html](https://developer.lovense.com/docs/ai/remote-mcp.html)
-- [cdn.lovense.com/UploadFiles/mcp/RemoteMCP.zip](https://cdn.lovense.com/UploadFiles/mcp/RemoteMCP.zip)
+`Transport.py` is therefore an independent implementation written against the publicly
+documented Game Mode protocol. Wire formats and API behaviour are facts about a published
+interface, not copyrightable expression, and the implementation shares no code with the
+vendor sample. Rewriting also fixed two defects the sample had:
 
-No LICENSE file, copyright header, or terms of use appear in the zip, on the docs page,
-or on [Lovense's GitHub org](https://github.com/lovense). Absence of a license is not
-permission — under default copyright, all rights are reserved and no redistribution right
-has been granted. A free download is not a license grant.
+- It called `print()` on every request. This server speaks MCP over **stdio**, where
+  stdout is the protocol channel, so writing diagnostics there risks corrupting the
+  stream. `Transport.py` logs instead.
+- Its requests had **no timeout**, so a stalled connection blocked the caller
+  indefinitely — for a scheduled script, a hung thread.
 
-Files are kept separable so this can be resolved without untangling anything:
-
-| File | Provenance |
-|---|---|
-| `Functions.py` | **Upstream Lovense**, unmodified |
-| `StopFunction.py` | **Upstream Lovense**, unmodified |
-| `RemoteMCP.py` | **Mixed** — upstream skeleton, with added tools and validation |
-| `Transport.py` | Original |
-| `Patterns.py` | Original |
-| `Scheduler.py` | Original |
-
-**To publish publicly:** drop `Functions.py` and `StopFunction.py`, replace `RemoteMCP.py`
-with a thin registration layer of your own, and have users fetch the official zip
-themselves. That distributes only original work rather than redistributing Lovense's.
-
-Not legal advice — if it matters, check the terms you accepted on the Lovense developer
-portal, which govern regardless of what the public pages say.
+Not legal advice. If it matters to you, check the terms you accepted on the Lovense
+developer portal, which govern regardless of what the public pages say.
 
 ## Setup
 
@@ -40,6 +33,37 @@ portal, which govern regardless of what the public pages say.
 cp .mcp.json.example .mcp.json    # then fill in your own path and LAN IP
 uv sync
 ```
+
+## Development
+
+```bash
+uv run ruff check .          # lint
+uv run ruff format .         # format
+uv run mypy                  # type check (strict)
+uv run pytest                # tests
+```
+
+Tests never touch the network: an autouse fixture in `tests/conftest.py` blocks socket
+creation outright, so no test can actuate a real device even if a transport is left
+unmocked.
+
+Two naming rules are waived in `pyproject.toml`, both because the names are load-bearing
+interfaces rather than style choices: the MCP tool function names *are* the tool names
+exposed to clients, and `RemoteMCP.py` is named in every deployed `.mcp.json`. Renaming
+either would be a breaking change. Everything else is PEP 8 clean under `ruff` and
+`mypy --strict`.
+
+### Releases
+
+Merging to `main` cuts a release only when `version` in `pyproject.toml` has no matching
+tag, so routine merges don't produce releases. The workflow builds a wheel and sdist,
+creates a **draft** release, attaches the assets, and publishes last — immutable releases
+lock assets at publish time and none can be added afterwards.
+
+Release immutability is a repository setting, not a workflow option: enable it under
+**Settings → Releases → Enable release immutability**. Prove the pipeline *before*
+enabling it — once on, a tag can never be moved, deleted, or reused, so a botched test
+release burns that version number permanently.
 
 Get the IP and port from Lovense Remote → Game Mode. The app's local API server only runs
 while the app is foregrounded — it stops on background or screen lock, and requests then
@@ -58,10 +82,10 @@ fail with connection refused.
 
 ### Strength ranges
 
-**Vibrate and Rotate accept 0–20, but Pump only accepts 0–3.** The upstream sample did not
-enforce this, so out-of-range pump values were silently clamped to maximum — a pattern
-sweeping 0–20 across `v,p` held suction at full for most of its run rather than following
-the intended arc. Both entry points now validate per-feature ceilings.
+**Vibrate and Rotate accept 0–20, but Pump only accepts 0–3.** Nothing enforced this
+originally, so out-of-range pump values were silently clamped to maximum by the toy — a
+pattern sweeping 0–20 across `v,p` held suction at full for most of its run rather than
+following the intended arc. Both entry points now validate per-feature ceilings.
 
 One subtlety: when a pattern lists `v,p` together, the strength list *is* the vibration
 curve and pump is derived from it, so 0–20 remains legal there. Only a pump-only pattern
