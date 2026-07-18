@@ -8,6 +8,17 @@ dependencies = [
     "requests>=2.31.0",
 ]
 
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# The modules sit at the repo root rather than under src/, because .mcp.json
+# invokes RemoteMCP.py by path. Flat layout means setuptools cannot safely
+# auto-discover which top-level modules belong to the distribution, so they are
+# listed explicitly. Add new top-level modules here or they ship missing.
+py-modules = ["RemoteMCP", "Transport", "Scheduler", "Patterns"]
+
 [dependency-groups]
 dev = [
     "mypy>=1.13",
