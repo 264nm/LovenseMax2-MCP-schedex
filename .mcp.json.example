@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "RemoteMCP": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/absolute/path/to/RemoteMCP",
+        "run",
+        "--no-sync",
+        "RemoteMCP.py",
+        "GAME_MODE_IP=192.168.1.1",
+        "GAME_MODE_PORT=30010"
+      ]
+    }
+  }
+}

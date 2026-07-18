@@ -1,0 +1,14 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Local MCP config: contains a LAN IP and absolute home paths.
+# Copy .mcp.json.example to .mcp.json and fill in your own values.
+.mcp.json
