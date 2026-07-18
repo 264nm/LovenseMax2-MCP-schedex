@@ -1,9 +1,56 @@
 [project]
 name = "remotemcp"
 version = "0.1.0"
-description = "Add your description here"
+description = "MCP server for driving Lovense toys with independent per-channel scheduling and research-grounded presets"
 requires-python = ">=3.12"
 dependencies = [
     "mcp>=1.8.1",
     "requests>=2.31.0",
 ]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.8",
+    "types-requests>=2.31",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "ANN"]
+
+[tool.ruff.lint.per-file-ignores]
+# Two naming rules are waived, both because the names are load-bearing
+# interfaces rather than style choices:
+#
+# N999 (invalid-module-name): RemoteMCP.py is named in every existing
+# .mcp.json invocation, so renaming it breaks deployed configs.
+#
+# N802 (function name should be lowercase): the MCP tool functions in
+# RemoteMCP.py *are* the tool names exposed to clients, so renaming them is a
+# breaking interface change. Transport and Scheduler match that casing so the
+# call chain reads consistently.
+"*.py" = ["N999", "N802"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["RemoteMCP.py", "Patterns.py", "Scheduler.py", "Transport.py", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+# Modules live at the repo root (flat layout), so both they and tests/helpers.py
+# need to be importable from test files.
+pythonpath = [".", "tests"]
+# The scheduler runs on a worker thread, where an escaping exception would be
+# invisible to the caller. Promote that warning to an error so it cannot regress.
+filterwarnings = ["error::pytest.PytestUnhandledThreadExceptionWarning"]
+
+[tool.coverage.run]
+source = ["Patterns", "Scheduler", "Transport", "RemoteMCP"]

@@ -1,0 +1,79 @@
+name: Release
+
+# Releases only when the version in pyproject.toml has no matching tag, so
+# docs-only merges to main do not cut releases.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version from pyproject.toml
+        id: version
+        run: |
+          VERSION=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not parse version from pyproject.toml"
+            exit 1
+          fi
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version $VERSION"
+
+      - name: Decide whether to release
+        id: check
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if git rev-parse "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "Tag $TAG already exists - bump the version to cut a release."
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "Releasing $TAG"
+          fi
+
+      - name: Install uv
+        if: steps.check.outputs.release == 'true'
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Build wheel and sdist
+        if: steps.check.outputs.release == 'true'
+        run: uv build
+
+      - name: Publish release
+        if: steps.check.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          # Create as a draft and attach every asset first. Immutable releases
+          # lock assets and the tag at publish time, and assets cannot be added
+          # afterwards -- so publishing is the last step, never the first.
+          gh release create "$TAG" \
+            --draft \
+            --title "$TAG" \
+            --generate-notes \
+            --target "$GITHUB_SHA" \
+            dist/*
+
+          gh release edit "$TAG" --draft=false
+          echo "Published $TAG"

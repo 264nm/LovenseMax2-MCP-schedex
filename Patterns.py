@@ -1,5 +1,17 @@
 # Patterns.py
-# Custom named pattern presets, played via the Pattern command in Functions.py.
+# Custom named pattern presets, played via the Pattern command in Transport.py.
+
+from typing import TypedDict
+
+
+class PatternSpec(TypedDict):
+    """A named pattern: one strength cycle applied to one or more features."""
+
+    features: str
+    interval_ms: int
+    time_sec: int
+    strength: str
+
 
 # Each preset defines a strength cycle, a step interval in ms (must exceed 100),
 # the features it drives (v=Vibrate, r=Rotate, p=Pump), and a default play time.
@@ -10,7 +22,7 @@
 # levels 0-3, so any step above 3 saturates it. A pattern driving "v,p" therefore
 # holds suction at full for every step above 3, and only genuinely drops it in
 # troughs at 0-2. Use Scheduler.py when the channels need to move independently.
-PATTERNS = {
+PATTERNS: dict[str, PatternSpec] = {
     "slowburn": {
         # 50 steps x 1000ms = 50s act, loops 6x over the default 300s.
         # Arc: tease -> building strokes -> deepening -> burst -> release.
@@ -23,10 +35,10 @@ PATTERNS = {
         "interval_ms": 1000,
         "time_sec": 300,
         "strength": "3;3;4;4;5;4;5;6;5;6;"
-                    "8;5;9;6;10;6;11;7;12;8;13;8;"
-                    "14;9;15;10;16;10;17;11;18;12;18;12;"
-                    "20;14;20;15;20;16;20;16;20;18;20;18;"
-                    "15;10;6;3",
+        "8;5;9;6;10;6;11;7;12;8;13;8;"
+        "14;9;15;10;16;10;17;11;18;12;18;12;"
+        "20;14;20;15;20;16;20;16;20;18;20;18;"
+        "15;10;6;3",
     },
     "edgeplay": {
         # Single-curve fallback for the Scheduler.py "edgeplay" script, for when
@@ -45,12 +57,12 @@ PATTERNS = {
         "interval_ms": 6000,
         "time_sec": 300,
         "strength": "8;9;10;11;12;"
-                    "16;17;18;17;16;17;18;18;17;16;17;18;"
-                    "1;1;"
-                    "12;13;14;13;12;13;14;14;13;12;13;14;"
-                    "1;1;"
-                    "18;19;20;19;18;19;20;20;19;18;19;20;"
-                    "14;14;14;14;14",
+        "16;17;18;17;16;17;18;18;17;16;17;18;"
+        "1;1;"
+        "12;13;14;13;12;13;14;14;13;12;13;14;"
+        "1;1;"
+        "18;19;20;19;18;19;20;20;19;18;19;20;"
+        "14;14;14;14;14",
     },
     "edgeplay_motif": {
         # ~20s shareable distillation of edgeplay (40 steps x 500ms). The Lovense
@@ -62,13 +74,14 @@ PATTERNS = {
         "interval_ms": 500,
         "time_sec": 20,
         "strength": "16;17;18;18;17;16;17;18;19;20;"
-                    "20;19;18;17;16;17;18;19;20;20;"
-                    "20;19;18;17;16;17;18;19;20;20;"
-                    "19;18;17;16;15;16;17;18;19;20",
+        "20;19;18;17;16;17;18;19;20;20;"
+        "20;19;18;17;16;17;18;19;20;20;"
+        "19;18;17;16;15;16;17;18;19;20",
     },
 }
 
-def GetPattern(name):
+
+def GetPattern(name: str) -> tuple[str, str, int] | None:
     """
     Look up a named custom preset. Returns (rule, strength, default_time_sec)
     or None if the name is unknown.
