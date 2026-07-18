@@ -1,8 +1,8 @@
 [project]
 name = "remotemcp"
-version = "0.1.0"
+version = "1.0.0"
 description = "MCP server for driving Lovense toys with independent per-channel scheduling and research-grounded presets"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "mcp>=1.8.1",
     "requests>=2.31.0",
@@ -18,7 +18,7 @@ dev = [
 ]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py314"
 line-length = 100
 
 [tool.ruff.lint]
@@ -38,7 +38,7 @@ select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "ANN"]
 "*.py" = ["N999", "N802"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 strict = true
 files = ["RemoteMCP.py", "Patterns.py", "Scheduler.py", "Transport.py", "tests"]
 

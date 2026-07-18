@@ -18,8 +18,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The requires-python floor and the pinned .python-version.
-        python-version: ["3.12", "3.14"]
+        # Single entry: requires-python floor and .python-version are both 3.14.
+        python-version: ["3.14"]
 
     steps:
       - uses: actions/checkout@v4
